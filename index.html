@@ -486,7 +486,8 @@ var CB = (function () {
   var PRICE_RE = /(?:₹|\$|€|£|¥|₩|₽|₺|₫|฿|₱|₦|R\$|Rs\.?|INR|USD|EUR|GBP|AED|SAR|QAR|AUD|CAD|SGD|CHF)\s?\d|\d[\d.,]*\s?(?:₹|€|£|kr|zł|Kč|Ft|lei|лв|AED|SAR|INR|USD|EUR|GBP|CHF)(?![a-z])/i;
   var PRICE_RE_G = new RegExp(PRICE_RE.source, 'gi');
   var CART_RE = /\b(add to (cart|bag|basket)|quick (view|add|shop)|buy now|choose options|select options)\b/i;
-  var BLOCKPAGE_RE = /\b(just a moment|attention required|access denied|are you a robot|verify you are human|captcha|request blocked|pardon our interruption|403 forbidden|bot detection)\b/i;
+  var BLOCKPAGE_RE = /\b(just a moment|attention required|access denied|are you a (robot|human)|verify(ing)? (that )?you are (a )?human|captcha|request blocked|request unsuccessful|pardon our interruption|403 forbidden|bot detection|client challenge|checking (your|if the site connection)|security check|one more step|please enable (javascript|cookies)|enable javascript and cookies|ddos protection)\b/i;
+  var BLOCKPAGE_SRC_RE = /cdn-cgi\/challenge-platform|challenges\.cloudflare\.com|\/_fs-ch-|captcha-delivery\.com|_Incapsula_Resource|px-captcha|perimeterx|\/_sec\/cp_challenge|ak-challenge/i;
   var LOCAL_SAVE_RE = /^(\.\/)?[^\/?#]+_files\//i;
 
   function isHiddenEl(el) {
@@ -1516,7 +1517,7 @@ var CB = (function () {
 
     // checks
     var tl = clen(meta.title), dl = clen(meta.description);
-    if (BLOCKPAGE_RE.test(meta.title) || (bodyText.length < 1500 && BLOCKPAGE_RE.test(bodyText))) add('error', 'This looks like a bot check or access-denied page, not the real page. Use Capture from browser instead.');
+    if (BLOCKPAGE_RE.test(meta.title) || (bodyText.length < 1500 && (BLOCKPAGE_RE.test(bodyText) || BLOCKPAGE_SRC_RE.test(source)))) add('error', 'This looks like a bot check or access-denied page, not the real page. The site blocked the automatic fetch, so use Capture from browser instead.');
     if (bodyText.length < 250 && (doc.querySelector('#root,#app,#__next,#__nuxt,[ng-version],app-root,[data-reactroot]') || scriptCount > 5))
       add('error', 'This HTML has almost no copy, which usually means the page is built by JavaScript in the browser. Use Capture from browser (or DevTools → Copy outerHTML) instead.');
     if (!meta.title) add('error', 'No meta title found.');
