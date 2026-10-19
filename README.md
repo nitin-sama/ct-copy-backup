@@ -1,5 +1,9 @@
 # Copy Backup
 
+
+https://github.com/user-attachments/assets/2abafe80-2112-41bb-93e5-02437985c787
+
+
 Save a page's meta title, meta description and all copy between the site header and footer as clean, semantic HTML, with every image and its alt text in page order. Take a backup before you change a page's copy.
 
 These files run the same tool in three places:
