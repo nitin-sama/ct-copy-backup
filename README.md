@@ -1,36 +1,58 @@
 # Copy Backup
 
-# https://nitin-sama.github.io/ct-copy-backup/
+Back up a page's meta and copy as clean, semantic HTML before you change it, then compare what changed afterwards.
 
-https://github.com/user-attachments/assets/2abafe80-2112-41bb-93e5-02437985c787
+Paste a URL and press Enter. That's it. Pages built with JavaScript, or that block the quick fetch, are re-fetched in a real browser automatically.
 
-
-Save a page's meta title, meta description and all copy between the site header and footer as clean, semantic HTML, with every image and its alt text in page order. Take a backup before you change a page's copy.
-
-These files run the same tool in three places:
+## Files
 
 | File | What it does |
 | --- | --- |
-| `index.html` | The whole tool (Capture, Paste HTML, Upload files, and Fetch when a fetch service is present) |
-| `_worker.js` | The fetch service for Cloudflare (Workers or Pages). Ignored by GitHub Pages |
-| `wrangler.jsonc` | Cloudflare Workers settings: Worker name, which file is the server code, and which files are public |
-| `.assetsignore` | Keeps the server files private on Cloudflare Workers. Hidden on Mac and Linux because it starts with a dot |
-| `server.js` | The fetch service for running on your own computer |
-| `favicon.ico` | Browser tab icon for tools that look for /favicon.ico (the icon is also built into index.html) |
-| `README.md` | This file |
+| `index.html` | The whole tool |
+| `_worker.js` | The fetch service on Cloudflare: quick fetch plus browser rendering |
+| `wrangler.jsonc` | Cloudflare settings: Worker name, browser binding, which files are public |
+| `.assetsignore` | Keeps the server files private. Hidden on Mac because it starts with a dot |
+| `.gitignore` | Stops Mac's `.DS_Store` files from being committed |
+| `server.js` | Optional: run the tool on your own computer (`node server.js`) |
+| `favicon.ico` | Browser tab icon |
 
-**Fetch automatically** (type a URL, get the backup) appears only when a fetch service answers. On GitHub Pages the tab hides itself and everything else works.
+## Update your GitHub repo
 
-## Option 1: Cloudflare Workers connected to GitHub (free, includes Fetch)
+1. Replace every file in the repo with the files in this zip, and delete `.DS_Store` if it's there.
+2. Check that `.assetsignore` and `.gitignore` are in the top level of the repo. GitHub shows files that start with a dot. If they're missing (Mac hides them when you upload), use **Add file** → **Create new file**, type the exact name, and paste the contents shown at the end of this file.
+3. Check that `"name"` in `wrangler.jsonc` matches your Worker's name in Cloudflare (`ct-copy-backup`).
+4. Commit to `main`. Cloudflare redeploys automatically in about a minute.
 
-This is what Cloudflare's dashboard sets up by default when you import a GitHub repository.
+## Browser rendering (free)
 
-1. Put all seven files in the root of a GitHub repository. On Mac, `.assetsignore` is hidden after unzipping: in GitHub choose **Add file** → **Create new file**, name it `.assetsignore`, and paste its contents (listed below).
-2. In Cloudflare go to **Workers & Pages** → **Create application** → import your GitHub repository. Leave the build command empty, the deploy command as `npx wrangler deploy`, and the root directory as `/`.
-3. Make sure the Worker name you choose matches `"name"` in `wrangler.jsonc` (it's `copy-backup` in this download). If they differ, the build stops with a name error: edit that one line in GitHub.
-4. Deploy. Your tool is at `https://copy-backup.<your-subdomain>.workers.dev`. Every commit to GitHub redeploys it.
+`wrangler.jsonc` includes a `browser` binding for Cloudflare Browser Run. No API token or extra setup is needed. The free plan allows **10 minutes of browser time a day** and **one rendered page every 10 seconds**, which is roughly 60 to 100 pages a day.
 
-Contents of `.assetsignore`:
+The tool only uses it when needed: it tries a quick fetch first and renders in the browser only if the page looks empty or blocked. You can change this in the fetch options next to the **Back up** button (Desktop · JS auto ▾). When the free limit is reached, the tool waits or tells you, and the quick fetch keeps working.
+
+Some sites block all automated browsers. For those, open the page yourself, press Ctrl+U (⌥⌘U on Mac), copy everything, and press Ctrl+V in Copy Backup.
+
+If a deploy ever fails mentioning `browser`, delete the `"browser"` block from `wrangler.jsonc`. Everything except rendering keeps working.
+
+## Limit fetching to your own sites (recommended)
+
+Anyone with the link can use the fetch service. To limit it, open the Worker in Cloudflare → **Settings** → **Variables and Secrets** → add a Text variable `ALLOWED_HOSTS` with your domains, for example `acme.in, acme.com`. `keep_vars` in `wrangler.jsonc` keeps it across deploys.
+
+## Using it
+
+- **Back up:** paste a URL (or several, one per line) and press Enter.
+- **Paste or drop:** paste page source with Ctrl+V anywhere, or drop `.html` / `.mhtml` files anywhere.
+- **Copy tab:** every block in page order. Untick what isn't copy (click the tag or press X). Filter by headings, images or hidden copy, or search.
+- **Meta & SERP:** a Google result preview with pixel-width meters. Try new titles and descriptions before you write them.
+- **Outline:** the heading structure, with skipped levels flagged.
+- **Images:** every image with its alt text and alt status.
+- **Removed:** everything left out, and why. Restore anything.
+- **Compare:** after you change the page, back it up again; Compare shows added, removed and reworded blocks plus meta and alt changes.
+- **Code:** the backup file, content-only HTML or plain text.
+- **History** stays in your browser (left rail). Nothing about the pages is stored on the server.
+
+Keyboard: `/` URL bar · `1`–`7` tabs · `J`/`K` move · `X` keep or leave out · `F` find · `Ctrl+S` download · `?` help.
+
+## `.assetsignore` contents
 
 ```
 _worker.js
@@ -38,49 +60,18 @@ wrangler.jsonc
 server.js
 README.md
 .assetsignore
+.gitignore
+.DS_Store
 .git
 .github
 .wrangler
 node_modules
 ```
 
-Without `wrangler.jsonc` and `.assetsignore`, the deploy fails with "Uploading a Pages _worker.js file as an asset". That's Cloudflare refusing to publish server code as a public file.
-
-Free plan limits: 100,000 fetches a day across your account. Viewing the page itself is free.
-
-### Keep Fetch for your own sites only (recommended)
-
-Anyone with the link can use Fetch. To limit it to your company's domains:
-
-1. Open the Worker → **Settings** → **Variables and Secrets** → **Add**.
-2. Type **Text**, name `ALLOWED_HOSTS`, value for example `acme.in, acme.com` (subdomains are included). Select **Deploy**.
-
-`wrangler.jsonc` sets `keep_vars`, so this setting survives every redeploy from GitHub. Capture, Paste and Upload still work for every site.
-
-### Cloudflare Pages by drag and drop (no GitHub)
-
-In **Workers & Pages** → **Create application**, look for the Pages option to drag and drop your files, then drag in the unzipped folder. Pages runs `_worker.js` itself, so Fetch works there too, at `https://<project>.pages.dev`. Set `ALLOWED_HOSTS` under the project's **Settings** → **Variables and Secrets**, then create a new deployment.
-
-## Option 2: GitHub Pages (free, no Fetch)
-
-1. On github.com select **New repository**, name it `copy-backup`, set it to **Public**, and create it. (Free GitHub Pages needs a public repository.)
-2. Select **uploading an existing file**, drag in all the files and select **Commit changes**.
-3. Go to **Settings** → **Pages**. Under **Build and deployment**, set **Source** to **Deploy from a branch**, branch **main**, folder **/ (root)**, then **Save**.
-4. After a minute or two, the address appears at the top of that page: `https://<your-username>.github.io/copy-backup/`.
-
-## Option 3: your own computer
-
-Install Node.js 18 or newer, open a terminal in this folder and run:
+## `.gitignore` contents
 
 ```
-node server.js
+.DS_Store
+node_modules
+.wrangler
 ```
-
-Then open http://127.0.0.1:4173. See the comments at the top of `server.js` for sharing it on your office network.
-
-## Notes
-
-- Fetch gets raw HTML, like a crawler. Use **Capture from browser** for pages built by JavaScript, pages that block bots, or pages behind a login.
-- Some sites block requests from Cloudflare's network or from fake Googlebot user agents. Capture always works.
-- Password-protected staging: include the login in the URL, for example `https://user:password@staging.acme.in/page`. It's sent as HTTP Basic auth and not stored.
-- Backups are made in each person's browser. The fetch service passes pages straight through and doesn't store them.

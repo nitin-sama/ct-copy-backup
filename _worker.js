@@ -3,7 +3,11 @@
  * Pages runs this file automatically when it sits next to index.html.
  * It serves the tool and adds /api/fetch, which powers "Fetch automatically".
  *
- * Optional setting (Cloudflare dashboard → your Pages project → Settings →
+ * If wrangler.jsonc has a "browser" binding, pages that are built by
+ * JavaScript or come back blocked can be re-fetched in a real headless browser
+ * (Cloudflare Browser Run; the free plan allows 10 minutes a day).
+ *
+ * Optional setting (Cloudflare dashboard → your Worker → Settings →
  * Variables and Secrets):
  *   ALLOWED_HOSTS = acme.in, acme.com      only fetch these domains (and their
  *                                          subdomains). Leave unset to allow any site.
@@ -32,7 +36,7 @@ function allowedHost(hostname, allow) {
 
 async function handleFetch(request, url, env) {
   if (request.method !== 'GET') return json(405, { ok: false, error: 'Only GET is supported.' });
-  if (url.searchParams.has('ping')) return json(200, { ok: true, service: 'cloudflare' });
+  if (url.searchParams.has('ping')) return json(200, { ok: true, service: 'cloudflare', render: !!env.BROWSER });
 
   // Only answer the Copy Backup page on this same site. Browsers set this header
   // and pages can't fake it, so other websites can't use this service.
@@ -46,7 +50,7 @@ async function handleFetch(request, url, env) {
   if (!/^https?:$/.test(target.protocol)) return json(400, { ok: false, error: 'Only http and https URLs can be fetched.' });
 
   const allow = String(env.ALLOWED_HOSTS || '').split(/[\s,]+/).map(s => s.trim().toLowerCase().replace(/^www\./, '')).filter(Boolean);
-  const blocked = () => json(403, { ok: false, error: 'This copy of Copy Backup only fetches ' + allow.join(', ') + '. Use Capture from browser for other sites.' });
+  const blocked = () => json(403, { ok: false, error: 'This copy of Copy Backup only fetches ' + allow.join(', ') + '. For other sites, paste the page source instead.' });
   if (!allowedHost(target.hostname, allow)) return blocked();
 
   const headers = {
@@ -59,6 +63,8 @@ async function handleFetch(request, url, env) {
     target.username = '';
     target.password = '';
   }
+
+  if (url.searchParams.get('mode') === 'render') return renderPage(target, url.searchParams.get('ua'), headers, env, allow);
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -105,6 +111,72 @@ async function handleFetch(request, url, env) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+function streamHeaders(extra) {
+  return Object.assign({
+    'Content-Type': 'application/octet-stream',
+    'Content-Disposition': 'attachment; filename="page.html"',
+    'Content-Security-Policy': 'sandbox; default-src \'none\'',
+    'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': 'no-store'
+  }, extra);
+}
+
+// Re-fetch the page in Cloudflare's headless browser so JavaScript-built copy is included.
+async function renderPage(target, ua, headers, env, allow) {
+  if (!env.BROWSER) {
+    return json(200, { ok: false, error: 'Browser rendering isn’t switched on for this copy of Copy Backup.' });
+  }
+  const options = {
+    url: target.href,
+    gotoOptions: { waitUntil: 'networkidle2', timeout: 30000 },
+    rejectResourceTypes: ['image', 'media', 'font'],
+    userAgent: AGENTS[ua] || AGENTS.desktop
+  };
+  if (headers.Authorization) {
+    const pair = atob(headers.Authorization.slice(6));
+    const i = pair.indexOf(':');
+    options.authenticate = { username: pair.slice(0, i), password: pair.slice(i + 1) };
+  }
+  let res;
+  try {
+    res = await env.BROWSER.quickAction('content', options);
+  } catch (e) {
+    const msg = String((e && e.message) || e);
+    if (e instanceof TypeError || /not a function|does not implement|quickAction/i.test(msg)) return json(200, { ok: false, error: 'Browser rendering isn’t available on this Cloudflare account yet. Check that wrangler.jsonc has a compatibility date of 2026-03-24 or later.' });
+    if (/429|limit/i.test(msg)) return json(429, { ok: false, busy: true, error: 'The browser renderer is busy or over today’s free limit.' });
+    return json(200, { ok: false, error: 'The browser couldn’t load the page (' + msg.slice(0, 160) + ').' });
+  }
+  const used = res.headers.get('X-Browser-Ms-Used') || '';
+  const type = res.headers.get('Content-Type') || '';
+  if (res.status === 429) {
+    return json(429, { ok: false, busy: true, error: 'The free plan renders one page every 10 seconds and 10 minutes a day. Wait a moment and try again.' });
+  }
+  let html = '', finalUrl = target.href, status = 200;
+  if (/json/i.test(type)) {
+    let data = null;
+    try { data = await res.json(); } catch (e) { }
+    if (!data || data.success === false || !res.ok) {
+      const err = data && data.errors && data.errors[0];
+      const busy = !!(err && (err.code === 2001 || /rate|limit/i.test(err.message || '')));
+      return json(busy ? 429 : 200, { ok: false, busy, error: 'The browser couldn’t render the page' + (err && err.message ? ' (' + err.message + ')' : '') + '.' });
+    }
+    html = typeof data.result === 'string' ? data.result : (data.result && (data.result.content || data.result.html)) || '';
+    if (data.meta) { finalUrl = data.meta.finalUrl || data.meta.url || finalUrl; status = data.meta.status || status; }
+  } else {
+    if (!res.ok) return json(200, { ok: false, error: 'The browser couldn’t render the page (HTTP ' + res.status + ').' });
+    html = await res.text();
+  }
+  if (!html) return json(200, { ok: false, error: 'The browser returned an empty page.' });
+  try { if (!allowedHost(new URL(finalUrl).hostname, allow)) return json(403, { ok: false, error: 'The page redirected to a site this copy of Copy Backup doesn’t fetch.' }); } catch (e) { finalUrl = target.href; }
+  return new Response(html, {
+    status: 200,
+    headers: streamHeaders({
+      'X-CB-Status': String(status), 'X-CB-Final-Url': finalUrl, 'X-CB-Content-Type': 'text/html; charset=utf-8',
+      'X-CB-Redirected': finalUrl !== target.href ? '1' : '0', 'X-CB-Rendered': '1', 'X-CB-Browser-Ms': used
+    })
+  });
 }
 
 export default {

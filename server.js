@@ -135,7 +135,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (u.pathname === '/api/health') return json(res, 200, { ok: true });
   if (u.pathname === '/api/fetch') {
-    if (u.searchParams.has('ping')) return json(res, 200, { ok: true, service: 'local' });
+    if (u.searchParams.has('ping')) return json(res, 200, { ok: true, service: 'local', render: false });
     let target;
     try { target = new URL(u.searchParams.get('url') || ''); } catch (e) { return json(res, 400, { ok: false, error: 'That isn’t a valid URL.' }); }
     if (!/^https?:$/.test(target.protocol)) return json(res, 400, { ok: false, error: 'Only http and https URLs can be fetched.' });
