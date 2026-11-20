@@ -1,77 +1,35 @@
 # Copy Backup
 
-Back up a page's meta and copy as clean, semantic HTML before you change it, then compare what changed afterwards.
-
-Paste a URL and press Enter. That's it. Pages built with JavaScript, or that block the quick fetch, are re-fetched in a real browser automatically.
+Back up any page's meta title, meta description and copy in one click, right on the page.
 
 ## Files
 
-| File | What it does |
-| --- | --- |
-| `index.html` | The whole tool |
-| `_worker.js` | The fetch service on Cloudflare: quick fetch plus browser rendering |
-| `wrangler.jsonc` | Cloudflare settings: Worker name, browser binding, which files are public |
-| `.assetsignore` | Keeps the server files private. Hidden on Mac because it starts with a dot |
-| `.gitignore` | Stops Mac's `.DS_Store` files from being committed |
-| `server.js` | Optional: run the tool on your own computer (`node server.js`) |
-| `favicon.ico` | Browser tab icon |
+- `index.html` is the Copy Backup page. Open it in a browser, or put it on any web host, to get the button.
+- `bookmark.txt` is the button itself, if you'd rather add the bookmark by hand.
+- `source/` has the code, for developers who want to change it.
 
-## Update your GitHub repo
+## Add the button (one time)
 
-1. Replace every file in the repo with the files in this zip, and delete `.DS_Store` if it's there.
-2. Check that `.assetsignore` and `.gitignore` are in the top level of the repo. GitHub shows files that start with a dot. If they're missing (Mac hides them when you upload), use **Add file** → **Create new file**, type the exact name, and paste the contents shown at the end of this file.
-3. Check that `"name"` in `wrangler.jsonc` matches your Worker's name in Cloudflare (`ct-copy-backup`).
-4. Commit to `main`. Cloudflare redeploys automatically in about a minute.
+1. Open `index.html` (or your Copy Backup link) on a computer.
+2. Drag the yellow **Copy Backup** button up to your bookmarks bar. If the bar is hidden, press Ctrl+Shift+B (⌘⇧B on Mac).
 
-## Browser rendering (free)
+**To add it by hand:** create a new bookmark, name it Copy Backup, and paste the whole contents of `bookmark.txt` as its address (URL).
 
-`wrangler.jsonc` includes a `browser` binding for Cloudflare Browser Run. No API token or extra setup is needed. The free plan allows **10 minutes of browser time a day** and **one rendered page every 10 seconds**, which is roughly 60 to 100 pages a day.
+If you added the button before, add the new one and delete the old bookmark.
 
-The tool only uses it when needed: it tries a quick fetch first and renders in the browser only if the page looks empty or blocked. You can change this in the fetch options next to the **Back up** button (Desktop · JS auto ▾). When the free limit is reached, the tool waits or tells you, and the quick fetch keeps working.
+## Use it
 
-Some sites block all automated browsers. For those, open the page yourself, press Ctrl+U (⌥⌘U on Mac), copy everything, and press Ctrl+V in Copy Backup.
+1. Open the page you want to back up.
+2. Click **Copy Backup** in your bookmarks bar. A panel opens on the page. The button scrolls through the page by itself first, so copy that loads as you scroll is included.
+3. Pick a view and save:
+   - **Preview** shows the meta title, meta description and all the copy in page order, with images and their alt text. Hover a block and click × to leave it out.
+   - **HTML** shows clean HTML with the meta title and description on top. **Copy HTML** copies it.
+   - **Download** saves the full backup as an HTML file.
 
-If a deploy ever fails mentioning `browser`, delete the `"browser"` block from `wrangler.jsonc`. Everything except rendering keeps working.
+Press Esc or click the bookmark again to close the panel.
 
-## Limit fetching to your own sites (recommended)
+Works in Chrome, Edge, Firefox and Safari on a computer. A few very locked-down sites don't allow the panel; there, the button copies the page instead and tells you to paste it into the Copy Backup page.
 
-Anyone with the link can use the fetch service. To limit it, open the Worker in Cloudflare → **Settings** → **Variables and Secrets** → add a Text variable `ALLOWED_HOSTS` with your domains, for example `acme.in, acme.com`. `keep_vars` in `wrangler.jsonc` keeps it across deploys.
+## For developers: rebuilding
 
-## Using it
-
-- **Back up:** paste a URL (or several, one per line) and press Enter.
-- **Paste or drop:** paste page source with Ctrl+V anywhere, or drop `.html` / `.mhtml` files anywhere.
-- **Copy tab:** every block in page order. Untick what isn't copy (click the tag or press X). Filter by headings, images or hidden copy, or search.
-- **Meta & SERP:** a Google result preview with pixel-width meters. Try new titles and descriptions before you write them.
-- **Outline:** the heading structure, with skipped levels flagged.
-- **Images:** every image with its alt text and alt status.
-- **Removed:** everything left out, and why. Restore anything.
-- **Compare:** after you change the page, back it up again; Compare shows added, removed and reworded blocks plus meta and alt changes.
-- **Code:** the backup file, content-only HTML or plain text.
-- **History** stays in your browser (left rail). Nothing about the pages is stored on the server.
-
-Keyboard: `/` URL bar · `1`–`7` tabs · `J`/`K` move · `X` keep or leave out · `F` find · `Ctrl+S` download · `?` help.
-
-## `.assetsignore` contents
-
-```
-_worker.js
-wrangler.jsonc
-server.js
-README.md
-.assetsignore
-.gitignore
-.DS_Store
-.git
-.github
-.wrangler
-node_modules
-```
-
-## `.gitignore` contents
-
-```
-.DS_Store
-node_modules
-.wrangler
-```
+`source/build_bm.js` bundles `engine.js` and `overlay.js` into the minified bookmark (needs Node.js and `terser`). `source/build.py` puts the engine, the app and the bookmark into `index.html`. Keep the bookmark under 65,536 characters, Firefox's limit for bookmark addresses.
