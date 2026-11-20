@@ -48,7 +48,7 @@ var CB = (function () {
   }
   function snip(s, n) { s = normText(s); n = n || 140; return s.length > n ? s.slice(0, n - 1) + '…' : s; }
   function cls(el) { var c = el.getAttribute('class'); return c || ''; }
-  function sigOf(el) { return (cls(el) + ' ' + (el.id || '')).toLowerCase(); }
+  function sigOf(el) { return (cls(el) + ' ' + (el.getAttribute('id') || '')).toLowerCase(); }
   function tokRe(list) { return new RegExp('(?:^|[\\s_-])(?:' + list.join('|') + ')(?:$|[\\s_-])', 'i'); }
   function arr(x) { return Array.prototype.slice.call(x || []); }
   function isHttp(u) { return typeof u === 'string' && /^https?:\/\//i.test(u); }
@@ -143,7 +143,7 @@ var CB = (function () {
   var BUYBOX_RE = tokRe(['add-to-cart', 'addtocart', 'add-to-bag', 'buy-buttons', 'buy-box', 'buybox', 'product-form',
     'product__form', 'variant-picker', 'variant-selector', 'variant-selects', 'swatch', 'swatches', 'size-selector', 'quantity',
     'qty', 'quantity-selector', 'product-actions', 'wishlist', 'add-to-wishlist', 'stock-status', 'delivery-estimate', 'pincode',
-    'pin-code', 'store-availability', 'klarna\\w*', 'afterpay\\w*', 'affirm\\w*', 'shop-pay\\w*', 'payment-icons', 'installments?']);
+    'pin-code', 'store-availability', 'product__policies', 'product-single__policies', 'product-policies', 'product__tax', 'tax-note', 'price-per-item', 'klarna\\w*', 'afterpay\\w*', 'affirm\\w*', 'shop-pay\\w*', 'payment-icons', 'installments?']);
   var CHROME_RE = tokRe(['noprint', 'no-print', 'd-print-none', 'print-hidden', 'hidden-print', 'mw-editsection', 'editsection', 'mw-jump-link',
     'toc', 'vector-toc', 'navbox', 'vertical-navbox', 'catlinks', 'printfooter', 'mw-indicators', 'ambox', 'mbox-small', 'navigation-not-searchable',
     'sistersitebox', 'mw-portlet-lang', 'vector-dropdown', 'interlanguage', 'interlanguage-link', 'language-switcher', 'lang-switcher', 'language-selector',
@@ -326,7 +326,8 @@ var CB = (function () {
   function describe(el) {
     if (!el || !el.localName) return '';
     var s = '<' + el.localName;
-    if (el.id) s += ' id="' + el.id.slice(0, 40) + '"';
+    var eid = el.getAttribute('id');
+    if (eid) s += ' id="' + String(eid).slice(0, 40) + '"';
     var c = normText(cls(el)).split(' ').filter(Boolean).slice(0, 2).join(' ');
     if (c) s += ' class="' + (c.length > 48 ? c.slice(0, 47) + '…' : c) + '"';
     return s + '>';
@@ -344,7 +345,7 @@ var CB = (function () {
       var tag = el.localName;
       var role = (el.getAttribute('role') || '').toLowerCase();
       var sig = sigOf(el);
-      var id = el.id || '';
+      var id = el.getAttribute('id') || '';
       for (var i = 0; i < custom.length; i++) { try { if (el.matches(custom[i])) return 'Your exclude selectors'; } catch (e) { } }
       var prot = mainH1 && el.contains(mainH1);
       var bread = BREAD_RE.test(sig) || BREAD_RE.test(el.getAttribute('aria-label') || '') || /BreadcrumbList/.test(el.getAttribute('itemtype') || el.getAttribute('typeof') || '');
@@ -381,11 +382,17 @@ var CB = (function () {
           if (ptxt.length < 80 && /\d/.test(ptxt)) return 'Prices & buy buttons';
         }
         if (BUYBOX_RE.test(sig) && containerish && normText(el.textContent).length < 600) return 'Prices & buy buttons';
+        // Short price labels and separators ("Regular price", "Unit price", "/", "per") around a price.
+        var short = normText(el.textContent);
+        // Bare prices or price ranges ("$15 - $500"), and pay-later promos.
+        if (!HEADING.test(tag) && short.length < 30 && /^[\s$€£₹¥]*(rs\.?\s*)?\d[\d.,]*(\s*[-–]\s*[$€£₹¥]?\d[\d.,]*)?\s*[a-z]{0,3}$/i.test(short)) return 'Prices & buy buttons';
+        if (/^(shopify-payment-terms|afterpay-placement|klarna-placement|square-placement|affirm-placement)$/.test(tag) || (short.length < 140 && /\bpay in \d+ (interest[- ]free )?(payments|instalments|installments)\b/i.test(short))) return 'Prices & buy buttons';
+        if (short.length < 40 && (/price(?!ing)/.test(sig) || /^(regular|sale|unit|original|compare at|was|now)?\s*price:?$|^\/$|^per$/i.test(short)) && !HEADING.test(tag)) return 'Prices & buy buttons';
       }
       if (opts.reviews && (REVIEW_RE.test(sig) || REVIEW_ID_RE.test(id)) && containerish) return 'Reviews, comments & sharing';
       if (opts.sidebars && (tag === 'aside' || role === 'complementary' || SIDEBAR_RE.test(sig) || SIDEBAR_ID_RE.test(id)) && !(el.parentElement && el.parentElement.closest('article'))) return 'Sidebars';
       if (opts.forms) {
-        if (tag === 'form' && !bigCopy(el)) return 'Forms & buttons';
+        if ((tag === 'form' || el.hasAttribute('data-cb-form')) && !bigCopy(el)) return 'Forms & buttons';
         if (tag === 'button' || role === 'button') return isAccordionTrigger(el) ? null : 'Forms & buttons';
         if (tag === 'label' || tag === 'fieldset' || tag === 'output' || role === 'search' || role === 'tablist' || tag === 'search') return 'Forms & buttons';
         if (containerish && el.querySelector('select,textarea,input:not([type="hidden"])') && !el.querySelector('h1,h2,h3,h4,h5,h6,p,ul,ol,table,img,picture')) {
@@ -503,7 +510,7 @@ var CB = (function () {
     }
     function copyAttrs(src, dst, tag) {
       ['lang', 'dir'].forEach(function (a) { var v = src.getAttribute(a); if (v) dst.setAttribute(a, v); });
-      if (HEADING.test(tag) && src.id) dst.setAttribute('id', src.id);
+      if (HEADING.test(tag) && src.getAttribute('id')) dst.setAttribute('id', src.getAttribute('id'));
       (ATTRS[tag] || []).forEach(function (a) {
         var v = src.getAttribute(a);
         if (v == null) return;
@@ -1149,6 +1156,13 @@ var CB = (function () {
     if (env.finalUrl && entered && !sameUrl(env.finalUrl, entered)) add('info', 'The URL redirected to ' + env.finalUrl + '.');
 
     // prepass
+    arr(doc.querySelectorAll('form')).forEach(function (f) {
+      var d = doc.createElement('div');
+      arr(f.attributes).forEach(function (a) { if (a.name !== 'action' && a.name !== 'method') d.setAttribute(a.name, a.value); });
+      d.setAttribute('data-cb-form', '1');
+      while (f.firstChild) d.appendChild(f.firstChild);
+      f.parentNode.replaceChild(d, f);
+    });
     arr(doc.querySelectorAll('noscript')).forEach(function (ns) {
       var imgs = ns.querySelectorAll('img');
       var parent = ns.parentElement;

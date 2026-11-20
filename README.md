@@ -1,5 +1,3 @@
-# https://nitin-sama.github.io/ct-copy-backup/
-
 # Copy Backup
 
 Back up any page's meta title, meta description and copy in one click, right on the page.

@@ -17,10 +17,12 @@ const TOOL_URL = 'https://claude.ai/artifact/5sdD7waXKnnxUmCQaypV17';
   if (/toText\(|imagesCsv\(/.test(engine)) throw new Error('export still referenced');
   // The downloaded file keeps its light styles; dark-mode tweaks are left out to save space.
   engine = engine.split('\n').filter(l => !/prefers-color-scheme:dark/.test(l)).join('\n');
+  // The panel only shows problems, so warning and info notes are dropped from the bookmark to save space.
+  engine = engine.replace(/add\('(warn|info)', /g, 'addQuiet(').replace('    function add(level, text) {', '    function addQuiet() { }\n    function add(level, text) {');
   const overlay = fs.readFileSync('/home/claude/cb/overlay.js', 'utf8').replace('__TOOL_URL__', TOOL_URL);
   const bundle = '(function(){' + engine + '\n' + overlay + '\n})();';
   fs.writeFileSync('/home/claude/cb/bookmark.bundle.js', bundle);
-  const out = await minify(bundle, { compress: { passes: 3 }, mangle: true, format: { ascii_only: true, comments: false } });
+  const out = await minify(bundle, { compress: { passes: 3, pure_funcs: ['addQuiet'] }, mangle: true, format: { ascii_only: true, comments: false } });
   const code = out.code + 'void 0';
   fs.writeFileSync('/home/claude/cb/bookmark.min.js', code);
   // Encode only what a javascript: URL needs, keeping it short.

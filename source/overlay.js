@@ -184,7 +184,11 @@
   function extractBest(src) {
     var env = { DOMParser: Parser, url: location.href, sourceType: 'capture' };
     var tries = [OPTS, Object.assign({}, OPTS, { area: 'main' }), Object.assign({}, OPTS, { area: 'custom', customRoot: 'body' })], first = null;
-    for (var i = 0; i < tries.length; i++) { var r = CB.extract(src, tries[i], env); if (!first) first = r; if (r.blocks.length) return r; }
+    var err = null;
+    for (var i = 0; i < tries.length; i++) {
+      try { var r = CB.extract(src, tries[i], env); if (!first) first = r; if (r.blocks.length) return r; } catch (e) { err = err || e; }
+    }
+    if (!first) throw err;
     return first;
   }
 
